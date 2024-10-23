@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: taskmanager
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./backend/db/init.sh:/docker-entrypoint-initdb.d/init.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4567:4567"
+    environment:
+      RACK_ENV: development
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: taskmanager
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    volumes:
+      - ./backend:/app:cached
+      - /app/vendor
+      - bundle_data:/usr/local/bundle
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      bash -c "
+        echo 'Waiting for PostgreSQL to be ready...' &&
+        while ! nc -z db 5432; do
+          sleep 1
+        done &&
+        echo 'PostgreSQL is ready!' &&
+        bundle exec puma -p 4567 -b tcp://0.0.0.0"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:4567
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  bundle_data:
