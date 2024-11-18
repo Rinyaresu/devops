@@ -1,44 +1,76 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const API_URL = "http://localhost:4567/api";
+const API_URL = `${import.meta.env.VITE_API_URL}/api`;
 
 function App() {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState("");
+  const [serverId, setServerId] = useState(null);
 
   useEffect(() => {
     fetchTasks();
   }, []);
 
   const fetchTasks = async () => {
-    const response = await axios.get(`${API_URL}/tasks`);
-    setTasks(response.data);
+    try {
+      const response = await axios.get(`${API_URL}/tasks`);
+      const { server_id, tasks: taskData } = response.data;
+      setServerId(server_id);
+
+      const processedTasks = taskData.map((task) => ({
+        ...task,
+        completed: Boolean(task.completed),
+      }));
+      setTasks(processedTasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await axios.post(`${API_URL}/tasks`, { title: newTask });
-    setNewTask("");
-    fetchTasks();
+    try {
+      await axios.post(`${API_URL}/tasks`, {
+        title: newTask,
+        completed: false,
+      });
+      setNewTask("");
+      fetchTasks();
+    } catch (error) {
+      console.error("Error creating task:", error);
+    }
   };
 
   const toggleTask = async (task) => {
-    await axios.put(`${API_URL}/tasks/${task.id}`, {
-      ...task,
-      completed: !task.completed,
-    });
-    fetchTasks();
+    try {
+      await axios.put(`${API_URL}/tasks/${task.id}`, {
+        ...task,
+        completed: !Boolean(task.completed),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error updating task:", error);
+    }
   };
 
   const deleteTask = async (id) => {
-    await axios.delete(`${API_URL}/tasks/${id}`);
-    fetchTasks();
+    try {
+      await axios.delete(`${API_URL}/tasks/${id}`);
+      fetchTasks();
+    } catch (error) {
+      console.error("Error deleting task:", error);
+    }
   };
 
   return (
     <div className="container mx-auto p-4 max-w-md">
       <h1 className="text-2xl font-bold mb-4">Task Manager</h1>
+      {serverId && (
+        <div className="text-sm text-gray-500 mb-4">
+          Servido por: {serverId}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="mb-4">
         <input
@@ -61,11 +93,11 @@ function App() {
           <li key={task.id} className="flex items-center mb-2">
             <input
               type="checkbox"
-              checked={task.completed}
+              checked={Boolean(task.completed)}
               onChange={() => toggleTask(task)}
               className="mr-2"
             />
-            <span className={task.completed ? "line-through" : ""}>
+            <span className={Boolean(task.completed) ? "line-through" : ""}>
               {task.title}
             </span>
             <button
