@@ -25,8 +25,45 @@ def db
   )
 end
 
+def parse_boolean(value)
+  return true if value == 't'
+  return false if value == 'f'
+
+  value
+end
+
+def process_task_row(row)
+  row['completed'] = parse_boolean(row['completed'])
+  row
+end
+
+def simulate_load
+  if ENV['SIMULATE_LOAD'] == 'true'
+    sleep rand(1.0..2.0)
+  else
+    sleep rand(0.1..0.2)
+  end
+end
+
+get '/api/server-id' do
+  @active_connections ||= 0
+  @active_connections += 1
+  simulate_load
+  json({
+         server_id: ENV['SERVER_ID'],
+         load: ENV['SIMULATE_LOAD'] == 'true' ? 'high' : 'normal',
+         active_connections: @active_connections
+       })
+ensure
+  @active_connections -= 1
+end
+
 get '/api/tasks' do
-  json db.exec('SELECT * FROM tasks ORDER BY id').to_a
+  tasks = db.exec('SELECT * FROM tasks ORDER BY id').to_a
+  json({
+         server_id: ENV['SERVER_ID'],
+         tasks: tasks
+       })
 end
 
 post '/api/tasks' do
@@ -35,7 +72,7 @@ post '/api/tasks' do
     'INSERT INTO tasks (title, completed) VALUES ($1, $2) RETURNING *',
     [data['title'], false]
   )
-  json result.first
+  json process_task_row(result.first)
 end
 
 put '/api/tasks/:id' do
@@ -44,7 +81,7 @@ put '/api/tasks/:id' do
     'UPDATE tasks SET title = $1, completed = $2 WHERE id = $3 RETURNING *',
     [data['title'], data['completed'], params['id']]
   )
-  json result.first
+  json process_task_row(result.first)
 end
 
 delete '/api/tasks/:id' do
